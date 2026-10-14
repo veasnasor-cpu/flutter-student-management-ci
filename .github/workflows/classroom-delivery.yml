@@ -1,0 +1,67 @@
+name: Classroom Delivery
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check classroom secret
+        env:
+          CLASSROOM_TOKEN: ${{ secrets.CLASSROOM_TOKEN }}
+        run: |
+          if [ -z "$CLASSROOM_TOKEN" ]; then
+            echo "::error::CLASSROOM_TOKEN is missing"
+            exit 1
+          fi
+          echo "CLASSROOM_TOKEN configured"
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.2'
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze Dart code
+        run: flutter analyze
+      - name: Run unit and widget tests
+        run: flutter test
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.2'
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build classroom APK
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          test -n "$API_BASE_URL" || {
+            echo "API_BASE_URL missing"; exit 1;
+          }
+          flutter build apk --debug \
+          --dart-define="API_BASE_URL=$API_BASE_URL"
+      - name: Upload classroom APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: classroom-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
